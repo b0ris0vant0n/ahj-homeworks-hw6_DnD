@@ -233,7 +233,7 @@ export default class Trello {
 
       this.draggedEl.style.display = "none";
       this.trello.addEventListener("mousemove", this.dragMove);
-      document.addEventListener("mousemove", this.showPossiblePlace);
+      document.addEventListener("mouseover", this.showPossiblePlace);
       document.addEventListener("mouseup", this.mouseUp);
     }
   }
