@@ -253,6 +253,10 @@ export default class Trello {
       return;
     }
 
+    this.trello.removeEventListener("mousemove", this.dragMove);
+    document.removeEventListener("mousemove", this.showPossiblePlace);
+    document.removeEventListener("mouseup", this.mouseUp);
+    
     this.newPlace.replaceWith(this.draggedEl);
 
     this.draggedEl.style.display = "flex";
