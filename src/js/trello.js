@@ -3,6 +3,7 @@ import Card from "./card";
 export default class Trello {
   constructor() {
     this.trello = null;
+    this.newPlace = null;
 
     this.tasksTodo = [];
     this.tasksInProgress = [];
@@ -20,6 +21,7 @@ export default class Trello {
     this.mouseUp = this.mouseUp.bind(this);
     this.drawSavedTasks = this.drawSavedTasks.bind(this);
     this.showPossiblePlace = this.showPossiblePlace.bind(this);
+    this.handleTaskEvent = this.handleTaskEvent.bind(this);
   }
 
   init() {
@@ -168,74 +170,91 @@ export default class Trello {
   
 
   addListeners() {
-    const taskList = this.trello.querySelectorAll(".task");
-    [...taskList].forEach((el) =>
-      el.addEventListener("mouseover", this.onTaskEnter)
-    );
-    [...taskList].forEach((el) =>
-      el.addEventListener("mouseleave", this.onTaskLeave)
-    );
-    [...taskList].forEach((el) =>
-      el.addEventListener("mousedown", this.mouseDown)
-    );
-  }
+      this.trello.addEventListener("mouseover", this.handleTaskEvent);
+      this.trello.addEventListener("mouseleave", this.handleTaskEvent);
+      this.trello.addEventListener("mousedown", this.handleTaskEvent);
+    }
+
+  handleTaskEvent(event) {
+      const target = event.target;
+      const task = target.closest(".task");
+      
+      if (!task) return;
+    
+      switch (event.type) {
+        case "mouseover":
+          this.onTaskEnter(event, task);
+          break;
+        case "mouseleave":
+          this.onTaskLeave(event, task);
+          break;
+        case "mousedown":
+          this.mouseDown(event, task);
+          break;
+      }
+    }
+    
 
   removeTask(event) {
     const task = event.target.closest(".task");
     const parent = event.target.closest(".tasks-list");
 
-    parent.removeChild(task);
+    task.parentNode.removeChild(task);
+
   }
 
-  onTaskEnter(event) {
-    if (
-      event.target.classList.contains("task") &&
-      !event.target.querySelector(".close")
-    ) {
+  onTaskEnter(event, task) {
+    if (!task.querySelector(".close")) {
       const closeEl = document.createElement("div");
       closeEl.classList.add("tasks-list__close");
       closeEl.classList.add("close");
-
-      event.target.appendChild(closeEl);
+  
+      task.appendChild(closeEl);
       closeEl.style.top = `${closeEl.offsetTop - closeEl.offsetHeight / 2}px`;
-      closeEl.style.left = `${
-        event.target.offsetWidth - closeEl.offsetWidth - 3
-      }px`;
-
+      closeEl.style.left = `${task.offsetWidth - closeEl.offsetWidth - 3}px`;
+  
       closeEl.addEventListener("click", this.removeTask);
     }
   }
+  
+  onTaskLeave(event, task) {
+    const closeEl = task.querySelector(".close");
+    if (closeEl) {
+      task.removeChild(closeEl);
+    }
+  }
+  
 
-  onTaskLeave(event) {
-    event.target.removeChild(event.target.querySelector(".close"));
+  updateCardPosition(ghostEl, top, left) {
+    ghostEl.style.top = `${top}px`;
+    ghostEl.style.left = `${left}px`;
+  }
+  
+
+  mouseDown(event, task) {
+    if (!task) return;
+    this.draggedEl = task;
+    this.ghostEl = task.cloneNode(true);
+    this.ghostEl.removeChild(this.ghostEl.querySelector(".close"));
+    this.ghostEl.classList.add("dragged");
+    this.ghostEl.classList.add("ghost");
+    this.ghostEl.style.width = `${this.draggedEl.offsetWidth}px`;
+    this.ghostEl.style.height = `${this.draggedEl.offsetHeight}px`;
+    document.body.appendChild(this.ghostEl);
+  
+    this.top = event.pageY - this.draggedEl.getBoundingClientRect().top;
+    this.left = event.pageX - this.draggedEl.getBoundingClientRect().left;
+  
+    requestAnimationFrame(() => this.initDrag(event));
   }
 
-  mouseDown(event) {
-    if (event.target.classList.contains("task")) {
-      this.draggedEl = event.target;
-      this.ghostEl = event.target.cloneNode(true);
-      this.ghostEl.removeChild(this.ghostEl.querySelector(".close"));
-      this.ghostEl.classList.add("dragged");
-      this.ghostEl.classList.add("ghost");
-      this.ghostEl.style.width = `${this.draggedEl.offsetWidth}px`;
-      this.ghostEl.style.height = `${this.draggedEl.offsetHeight}px`;
-      document.body.appendChild(this.ghostEl);
+  initDrag(event) {
+    this.ghostEl.style.top = `${event.pageY - this.top}px`;
+    this.ghostEl.style.left = `${event.pageX - this.left}px`;
 
-      const { top, left } = event.target.getBoundingClientRect();
-      this.top = event.pageY - top;
-      this.left = event.pageX - left;
-
-      this.ghostEl.style.top = `${top - this.draggedEl.offsetHeight}px`;
-      this.ghostEl.style.left = `${left - this.trello.offsetWidth}px`;
-
-      this.ghostEl.style.width = `${this.draggedEl.offsetWidth}px`;
-      this.ghostEl.style.height = `${this.draggedEl.offsetHeight}px`;
-
-      this.draggedEl.style.display = "none";
-      this.trello.addEventListener("mousemove", this.dragMove);
-      document.addEventListener("mouseover", this.showPossiblePlace);
-      document.addEventListener("mouseup", this.mouseUp);
-    }
+    this.trello.addEventListener("mousemove", this.dragMove);
+    document.addEventListener("mouseover", this.showPossiblePlace);
+    document.addEventListener("mouseup", this.mouseUp);
   }
 
   dragMove(event) {
@@ -243,27 +262,43 @@ export default class Trello {
     if (!this.draggedEl) {
       return;
     }
-
-    this.ghostEl.style.top = `${event.pageY - this.top}px`;
-    this.ghostEl.style.left = `${event.pageX - this.left}px`;
+  
+    const { pageX, pageY } = event;
+    const top = pageY - this.top;
+    const left = pageX - this.left;
+  
+    this.updateCardPosition(this.ghostEl, top, left);
+  
+    requestAnimationFrame(() => this.dragMove(event));
   }
-
+  
   mouseUp() {
     if (!this.draggedEl) {
       return;
     }
-
+  
     this.trello.removeEventListener("mousemove", this.dragMove);
-    document.removeEventListener("mousemove", this.showPossiblePlace);
+    document.removeEventListener("mouseover", this.showPossiblePlace);
     document.removeEventListener("mouseup", this.mouseUp);
-    
-    this.newPlace.replaceWith(this.draggedEl);
-
+  
+    if (this.newPlace) {
+      this.newPlace.parentNode.replaceChild(this.draggedEl, this.newPlace);
+    }
+  
     this.draggedEl.style.display = "flex";
     document.body.removeChild(document.body.querySelector(".dragged"));
-
+  
     this.ghostEl = null;
     this.draggedEl = null;
+    this.clearGhost();
+  }
+  
+  clearGhost() {
+    if (this.ghostEl) {
+      this.ghostEl.style.display = "none";
+      document.body.removeChild(this.ghostEl);
+      this.ghostEl = null;
+    }
   }
 
   showPossiblePlace(event) {
@@ -271,27 +306,27 @@ export default class Trello {
     if (!this.draggedEl) {
       return;
     }
-
+  
     const closestColumn = event.target.closest(".tasks-list");
-
+  
     if (closestColumn) {
       const allTasks = closestColumn.querySelectorAll(".task");
       const allPos = [closestColumn.getBoundingClientRect().top];
-
+  
       if (allTasks) {
         for (const item of allTasks) {
           allPos.push(item.getBoundingClientRect().top + item.offsetHeight / 2);
         }
       }
-
+  
       if (!this.newPlace) {
         this.newPlace = document.createElement("div");
         this.newPlace.classList.add("task-list__new-place");
       }
-
+  
       this.newPlace.style.width = `${this.ghostEl.offsetWidth}px`;
       this.newPlace.style.height = `${this.ghostEl.offsetHeight}px`;
-
+  
       const itemIndex = allPos.findIndex((item) => item > event.pageY);
       if (itemIndex !== -1) {
         closestColumn.insertBefore(this.newPlace, allTasks[itemIndex - 1]);
@@ -300,4 +335,4 @@ export default class Trello {
       }
     }
   }
-}
+}  

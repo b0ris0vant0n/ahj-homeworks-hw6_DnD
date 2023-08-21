@@ -74,6 +74,7 @@
     position: absolute;
     z-index: 999;
     opacity: 50%;
+    transition: transform 0.2s ease;
   }
   
   .column__add {
